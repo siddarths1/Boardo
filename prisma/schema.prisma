@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("postgres://766befa48b1045432adf8f03b39e4e63d34ed945330884bf93c37edadc9fe8b6:sk_XPNj39L7QeFXEpRxg4PHy@db.prisma.io:5432/postgres?sslmode=require")
 }
 
 model Project {
