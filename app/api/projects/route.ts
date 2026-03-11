@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
-  const projects = await prisma.project.findMany({
-    where: { archived: false },
-    orderBy: { order: "asc" },
-  });
-  return NextResponse.json(projects);
+  try {
+    const projects = await prisma.project.findMany({
+      where: { archived: false },
+      orderBy: { order: "asc" },
+    });
+    return NextResponse.json(projects);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[GET /api/projects]", e);
+    return NextResponse.json(
+      { error: "Failed to fetch projects", details: message },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -25,7 +34,11 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(project);
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[POST /api/projects]", e);
+    return NextResponse.json(
+      { error: "Failed to create project", details: message },
+      { status: 500 }
+    );
   }
 }

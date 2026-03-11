@@ -50,6 +50,25 @@ A responsive todo and Kanban app with multiple projects, task priorities and due
 
 4. **Build**: Use `npm run build`. Ensure `prisma generate` runs (it’s in `postinstall` and in the build script).
 
+## Troubleshooting 500 on Vercel
+
+The 500 on `/api/projects` and `/api/tasks` is **not CORS** (same-origin requests). It’s almost always the **database**:
+
+1. **`DATABASE_URL` missing or wrong**  
+   In Vercel → Settings → Environment Variables, set `DATABASE_URL` for **Production** (and Preview if you use it). Use the full Postgres connection string from Vercel Postgres or your provider. Redeploy after changing env vars.
+
+2. **Tables don’t exist**  
+   The production database must have the Prisma schema applied. Either:
+   - Run **once** (from your machine or Vercel’s deploy hook) with production `DATABASE_URL`:  
+     `npx prisma db push`  
+     or  
+     `npx prisma migrate deploy`  
+     (use `migrate deploy` only if you use migrations; otherwise `db push` is enough.)
+   - Or add a **build script** that runs `prisma db push` or `prisma migrate deploy` before `next build` (e.g. in `package.json`: `"build": "prisma generate && prisma db push && next build"`). Then redeploy.
+
+3. **See the real error**  
+   After deploying the latest code, open DevTools → Network, trigger the failing request (e.g. load dashboard or create a project). Click the request and check the **Response** tab: the API now returns `{ error: "...", details: "..." }`. The `details` field is the actual error (e.g. “Can’t reach database server”, “Table 'Project' does not exist”). You can also check **Vercel → Logs → Function logs** for the same message.
+
 ## Scripts
 
 - `npm run dev` — Start dev server

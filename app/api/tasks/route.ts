@@ -3,27 +3,36 @@ import { prisma } from "@/lib/db";
 import { sortTasksByPriorityAndDue } from "@/lib/priorities";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("projectId");
-  const activeOnly = searchParams.get("activeOnly") !== "false"; // default: only Todo + InProgress for "today's priorities"
+  try {
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("projectId");
+    const activeOnly = searchParams.get("activeOnly") !== "false"; // default: only Todo + InProgress for "today's priorities"
 
-  const where: { projectId?: string; column?: { in: string[] } } = {};
-  if (projectId) where.projectId = projectId;
-  if (activeOnly) where.column = { in: ["Todo", "InProgress"] };
+    const where: { projectId?: string; column?: { in: string[] } } = {};
+    if (projectId) where.projectId = projectId;
+    if (activeOnly) where.column = { in: ["Todo", "InProgress"] };
 
-  const tasks = await prisma.task.findMany({
-    where,
-    include: { project: { select: { name: true } } },
-    orderBy: [{ column: "asc" }, { orderInColumn: "asc" }],
-  });
+    const tasks = await prisma.task.findMany({
+      where,
+      include: { project: { select: { name: true } } },
+      orderBy: [{ column: "asc" }, { orderInColumn: "asc" }],
+    });
 
-  const sorted = sortTasksByPriorityAndDue(
-    tasks.map((t) => ({
-      ...t,
-      dueDate: t.dueDate,
-    }))
-  );
-  return NextResponse.json(sorted);
+    const sorted = sortTasksByPriorityAndDue(
+      tasks.map((t) => ({
+        ...t,
+        dueDate: t.dueDate,
+      }))
+    );
+    return NextResponse.json(sorted);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[GET /api/tasks]", e);
+    return NextResponse.json(
+      { error: "Failed to fetch tasks", details: message },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -64,7 +73,11 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(task);
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Failed to create task" }, { status: 500 });
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[POST /api/tasks]", e);
+    return NextResponse.json(
+      { error: "Failed to create task", details: message },
+      { status: 500 }
+    );
   }
 }
