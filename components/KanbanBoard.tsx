@@ -63,7 +63,8 @@ export function KanbanBoard({
     const overData = over.data.current as { columnId?: string; index?: number } | undefined;
     // Resolve target column: from droppable/sortable data, or from over.id when it's a column
     const newColumn =
-      overData?.columnId ?? (COLUMN_IDS.includes(over.id as string) ? (over.id as string) : null);
+      overData?.columnId ??
+      ((COLUMN_IDS as readonly string[]).includes(over.id as string) ? (over.id as string) : null);
     if (!newColumn) return;
 
     const task = tasks.find((t) => t.id === taskId);
