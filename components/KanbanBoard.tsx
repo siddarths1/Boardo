@@ -3,11 +3,11 @@
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
-  DragStartEvent,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
+  pointerWithin,
 } from "@dnd-kit/core";
 import { useState } from "react";
 import { KanbanColumn } from "./KanbanColumn";
@@ -18,6 +18,7 @@ const COLUMNS = [
   { id: "InProgress", title: "In Progress" },
   { id: "Done", title: "Done" },
 ] as const;
+const COLUMN_IDS = COLUMNS.map((c) => c.id);
 
 type Project = { id: string; name: string };
 type Task = {
@@ -48,21 +49,26 @@ export function KanbanBoard({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
   async function handleDragEnd(ev: DragEndEvent) {
     const { active, over } = ev;
     if (!over) return;
+    // Don't treat drop on self as a move
+    if (over.id === active.id) return;
+
     const taskId = active.id as string;
     const overData = over.data.current as { columnId?: string; index?: number } | undefined;
-    if (!overData?.columnId) return;
-    const newColumn = overData.columnId;
+    // Resolve target column: from droppable/sortable data, or from over.id when it's a column
+    const newColumn =
+      overData?.columnId ?? (COLUMN_IDS.includes(over.id as string) ? (over.id as string) : null);
+    if (!newColumn) return;
+
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-    const newIndex = typeof overData.index === "number" ? overData.index : 0;
+    const newIndex = typeof overData?.index === "number" ? overData.index : 0;
 
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -115,7 +121,11 @@ export function KanbanBoard({
 
   return (
     <div>
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragEnd={handleDragEnd}
+      >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {COLUMNS.map((col) => (
             <KanbanColumn

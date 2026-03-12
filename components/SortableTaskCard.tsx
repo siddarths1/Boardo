@@ -45,8 +45,20 @@ export function SortableTaskCard({ task, index, onEdit }: SortableTaskCardProps)
       style={style}
       className={isDragging ? "opacity-50" : ""}
     >
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
-        <TaskCard task={task} onEdit={onEdit} />
+      <div className="flex items-start gap-2">
+        <div
+          {...attributes}
+          {...listeners}
+          className="mt-0.5 cursor-grab touch-none active:cursor-grabbing"
+          aria-label="Drag to reorder"
+        >
+          <span className="inline-block text-gray-400" style={{ lineHeight: 1 }}>
+            ⋮⋮
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <TaskCard task={task} onEdit={onEdit} />
+        </div>
       </div>
     </li>
   );
