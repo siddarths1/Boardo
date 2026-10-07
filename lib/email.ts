@@ -1,46 +1,21 @@
-import { Resend } from "resend";
-
-type TaskItem = {
-  title: string;
-  priority: string;
-  dueDate: Date | null;
-  project?: { name: string };
-};
-
-export async function sendDailyDigest(to: string, tasks: TaskItem[], appUrl?: string): Promise<void> {
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not set");
-  }
-
-  const baseUrl = appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const listItems = tasks
-    .slice(0, 20)
-    .map(
-      (t) =>
-        `• [${t.priority}] ${t.title}${t.project?.name ? ` (${t.project.name})` : ""}${t.dueDate ? ` — Due ${new Date(t.dueDate).toLocaleDateString()}` : ""}`
-    )
-    .join("\n");
-
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 16px;">
-  <h1 style="font-size: 1.25rem;">Today's top priorities</h1>
-  <p style="color: #666;">Here are your most important tasks for today:</p>
-  <pre style="white-space: pre-wrap; background: #f5f5f5; padding: 12px; border-radius: 8px;">${listItems || "No active tasks."}</pre>
-  <p style="margin-top: 24px;">
-    <a href="${baseUrl}/dashboard" style="color: #4f46e5;">Open dashboard →</a>
-  </p>
-</body>
-</html>
-  `.trim();
-
-  await resend.emails.send({
-    from: process.env.RESEND_FROM ?? "Todo Kanban <onboarding@resend.dev>",
-    to: [to],
-    subject: "Your daily task digest",
-    html,
-  });
+export type DigestPayload = { from: string; to: string[]; subject: string; html: string; text: string };
+export function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!)); }
+export function digestPayload(input: { to: string; from: string; appUrl: string; date: string; outcomes: string[]; next: { title: string; minutes: number; reasons: string[] } | null; capacity: number; overload: number }): DigestPayload {
+  const url = new URL(input.appUrl);
+  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || (process.env.NODE_ENV === "production" && url.protocol !== "https:")) throw new Error("Invalid application URL");
+  const lines = [`Your Boardo brief · ${input.date}`, "", ...input.outcomes.map((o) => "• " + o), "",
+    input.next ? `Next: ${input.next.title} (~${input.next.minutes} min)` : "Choose today's outcomes and a next step.",
+    ...(input.next?.reasons || []), "", `${input.capacity} minutes of planned capacity remain.`,
+    input.overload ? `Chosen work exceeds capacity by ${input.overload} minutes. Consider deferring something.` : "", "", new URL("/dashboard", url).href].filter((line) => line !== "");
+  const text = lines.join("\n");
+  return { from: input.from, to: [input.to], subject: "Your day, with intention — Boardo",
+    text, html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#263b32;max-width:580px;margin:auto;padding:24px"><h1 style="font-size:26px">A good next step.</h1><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(text)}</div><p><a href="${escapeHtml(new URL("/dashboard",url).href)}">Open your day →</a></p></body></html>` };
+}
+export async function sendDigest(payload: DigestPayload, idempotencyKey: string): Promise<string> {
+  if (!process.env.RESEND_API_KEY) throw new Error("Email is not configured");
+  const response = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(10000),
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify(payload) });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.id || result.error) throw new Error("Email provider rejected the request");
+  return result.id as string;
 }

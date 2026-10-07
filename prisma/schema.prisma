@@ -4,8 +4,37 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // env("DATABASE_URL") = name of the env var. Set DATABASE_URL in Vercel (or .env) to your Postgres URL.
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String          @id @default(cuid())
+  email     String          @unique
+  timezone  String          @default("Asia/Calcutta")
+  createdAt DateTime        @default(now())
+  projects  Project[]
+  goals     Goal[]
+  sessions  Session[]
+  intents   DailyIntent[]
+  activity  ActivityEvent[]
+  focus     FocusSession[]
+  digests   DigestRun[]
+}
+
+model Session {
+  tokenHash         String   @id
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt         DateTime
+  credentialVersion String
+
+  @@index([expiresAt])
+}
+
+model LoginWindow {
+  key       String   @id
+  attempts  Int      @default(0)
+  expiresAt DateTime
 }
 
 model Project {
@@ -15,17 +44,111 @@ model Project {
   archived  Boolean  @default(false)
   createdAt DateTime @default(now())
   tasks     Task[]
+  version   Int      @default(0)
+  // Existing records are inaccessible until explicitly claimed with setup:owner.
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, archived, order])
+}
+
+model Goal {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  area       String  @default("Work")
+  importance Int     @default(3)
+  archived   Boolean @default(false)
+  tasks      Task[]
+
+  @@index([userId, archived])
 }
 
 model Task {
-  id            String   @id @default(cuid())
-  projectId     String
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title         String
-  priority      String   @default("Medium") // High | Medium | Low
-  dueDate       DateTime?
-  column        String   @default("Todo")  // Todo | InProgress | Done
-  orderInColumn Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String         @id @default(cuid())
+  projectId        String
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title            String
+  priority         String         @default("Medium") // High | Medium | Low
+  dueDate          DateTime?
+  column           String         @default("Todo") // Todo | InProgress | Done
+  orderInColumn    Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  goalId           String?
+  goal             Goal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  notes            String         @default("")
+  estimatedMinutes Int            @default(30)
+  energy           String         @default("Medium")
+  context          String         @default("Any")
+  blockedReason    String?
+  deferredUntil    DateTime?
+  completedAt      DateTime?
+  version          Int            @default(0)
+  focus            FocusSession[]
+  dependsOnId      String?
+  dependsOn        Task?          @relation("TaskDependency", fields: [dependsOnId], references: [id], onDelete: SetNull)
+  dependents       Task[]         @relation("TaskDependency")
+
+  @@index([projectId, column, orderInColumn])
+  @@index([dueDate])
+}
+
+model DailyIntent {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date             String
+  outcomes         String[] @default([])
+  outcomeTaskIds   String[] @default([])
+  pinnedTaskIds    String[] @default([])
+  availableMinutes Int      @default(240)
+  bufferPercent    Int      @default(20)
+  energy           String   @default("Medium")
+  context          String   @default("Desk")
+  review           String   @default("")
+  version          Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model ActivityEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  action    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model FocusSession {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  minutes   Int       @default(0)
+
+  @@index([userId, startedAt])
+}
+
+model DigestRun {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       String
+  status     String    @default("pending")
+  payload    Json
+  lockedAt   DateTime?
+  providerId String?
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, date])
 }

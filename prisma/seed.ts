@@ -1,30 +1,20 @@
+import { loadEnvConfig } from "@next/env";
 import { PrismaClient } from "@prisma/client";
-
+loadEnvConfig(process.cwd());
 const prisma = new PrismaClient();
-
 async function main() {
-  await prisma.task.deleteMany({});
-  await prisma.project.deleteMany({});
-
-  const projects = await Promise.all([
-    prisma.project.create({ data: { name: "A", order: 0 } }),
-    prisma.project.create({ data: { name: "B", order: 1 } }),
-    prisma.project.create({ data: { name: "C", order: 2 } }),
-    prisma.project.create({ data: { name: "General", order: 3 } }),
-  ]);
-
-  await prisma.task.createMany({
-    data: [
-      { projectId: projects[0].id, title: "Sample task A1", priority: "High", column: "Todo", orderInColumn: 0 },
-      { projectId: projects[3].id, title: "Sample general task", priority: "Medium", column: "Todo", orderInColumn: 0 },
-    ],
-  });
+  const url = new URL(process.env.DATABASE_URL || "");
+  if (process.env.ALLOW_DEVELOPMENT_SEED !== "true" || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || process.env.NODE_ENV === "production") throw new Error("Seeding requires ALLOW_DEVELOPMENT_SEED=true and a local development database.");
+  const email = process.env.BOARDO_OWNER_EMAIL?.trim().toLowerCase();
+  if (!email) throw new Error("Set BOARDO_OWNER_EMAIL.");
+  const user = await prisma.user.upsert({ where: { email }, create: { email }, update: {} });
+  if (await prisma.project.count({ where: { userId: user.id } })) { console.log("Existing projects preserved; no seed changes."); return; }
+  const goal = await prisma.goal.create({ data: { userId: user.id, title: "Make steady progress on meaningful work", area: "Work", importance: 4 } });
+  const project = await prisma.project.create({ data: { name: "My next chapter", userId: user.id } });
+  await prisma.task.createMany({ data: [
+    { projectId: project.id, goalId: goal.id, title: "Outline the next milestone", priority: "High", estimatedMinutes: 30, energy: "Medium", context: "Desk", orderInColumn: 0 },
+    { projectId: project.id, title: "Clear one small admin task", estimatedMinutes: 10, energy: "Low", context: "Any", orderInColumn: 1 },
+  ] });
+  console.log("Created a small starter workspace.");
 }
-
-main()
-  .then(() => prisma.$disconnect())
-  .catch((e) => {
-    console.error(e);
-    prisma.$disconnect();
-    process.exit(1);
-  });
+main().catch((error) => { console.error(error.message); process.exitCode = 1; }).finally(() => prisma.$disconnect());
