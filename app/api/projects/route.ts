@@ -1,44 +1,17 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authenticated } from "@/lib/api";
+import { json, jsonBody } from "@/lib/http";
 import { prisma } from "@/lib/db";
-
-export async function GET() {
-  try {
-    const projects = await prisma.project.findMany({
-      where: { archived: false },
-      orderBy: { order: "asc" },
-    });
-    return NextResponse.json(projects);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    console.error("[GET /api/projects]", e);
-    return NextResponse.json(
-      { error: "Failed to fetch projects", details: message },
-      { status: 500 }
-    );
-  }
+import { userTransaction } from "@/lib/tasks";
+export async function GET(request: Request) {
+  return authenticated(request, async (user) => json(await prisma.project.findMany({ where: { userId: user.id, ...(new URL(request.url).searchParams.get("archived") === "true" ? {} : { archived: false }) }, orderBy: [{ order: "asc" }, { id: "asc" }] })));
 }
-
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { name, order } = body as { name?: string; order?: number };
-    if (!name || typeof name !== "string" || name.trim() === "") {
-      return NextResponse.json({ error: "name is required" }, { status: 400 });
-    }
-    const maxOrder = await prisma.project.aggregate({ _max: { order: true } }).then((r) => r._max.order ?? -1);
-    const project = await prisma.project.create({
-      data: {
-        name: name.trim(),
-        order: typeof order === "number" ? order : maxOrder + 1,
-      },
-    });
-    return NextResponse.json(project);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    console.error("[POST /api/projects]", e);
-    return NextResponse.json(
-      { error: "Failed to create project", details: message },
-      { status: 500 }
-    );
-  }
+  return authenticated(request, async (user) => {
+    const data = z.object({ name: z.string().trim().min(1, "Add a project name.").max(150) }).strict().parse(await jsonBody(request));
+    return json(await userTransaction(user.id, async (tx) => {
+      const count = await tx.project.count({ where: { userId: user.id } });
+      return tx.project.create({ data: { ...data, userId: user.id, order: count } });
+    }), 201);
+  });
 }

@@ -1,123 +1,35 @@
 "use client";
-
-import { useState, useEffect } from "react";
-
-type Project = { id: string; name: string };
-
-type TaskFormProps = {
-  projects: Project[];
-  initial?: {
-    id?: string;
-    title: string;
-    projectId: string;
-    priority: string;
-    dueDate: string;
-  };
-  onSubmit: (data: { title: string; projectId: string; priority: string; dueDate: string }) => Promise<void>;
-  onCancel?: () => void;
-};
-
-export function TaskForm({ projects, initial, onSubmit, onCancel }: TaskFormProps) {
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [projectId, setProjectId] = useState(initial?.projectId ?? projects[0]?.id ?? "");
-  const [priority, setPriority] = useState(initial?.priority ?? "Medium");
-  const [dueDate, setDueDate] = useState(initial?.dueDate ?? "");
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!projectId && projects[0]) setProjectId(projects[0].id);
-  }, [projects, projectId]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) return;
-    setSubmitting(true);
-    try {
-      await onSubmit({ title: title.trim(), projectId, priority, dueDate });
-      setTitle("");
-      setDueDate("");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <div>
-        <label htmlFor="task-title" className="mb-1 block text-sm font-medium text-gray-700">
-          Title
-        </label>
-        <input
-          id="task-title"
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Task title"
-          className="block w-full min-w-[200px] rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-      </div>
-      <div>
-        <label htmlFor="task-project" className="mb-1 block text-sm font-medium text-gray-700">
-          Project
-        </label>
-        <select
-          id="task-project"
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          className="block rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="task-priority" className="mb-1 block text-sm font-medium text-gray-700">
-          Priority
-        </label>
-        <select
-          id="task-priority"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-          className="block rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-        </select>
-      </div>
-      <div>
-        <label htmlFor="task-due" className="mb-1 block text-sm font-medium text-gray-700">
-          Due date
-        </label>
-        <input
-          id="task-due"
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="block rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting || !title.trim()}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {submitting ? "Saving…" : initial?.id ? "Update" : "Add task"}
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-        )}
-      </div>
-    </form>
-  );
+import { useId, useState } from "react";
+import { Task, Project, Goal } from "@/lib/types";
+export type TaskInput = { title: string; projectId: string; priority: string; dueDate: string | null; goalId: string | null; dependsOnId: string | null; notes: string; estimatedMinutes: number; energy: string; context: string };
+export function TaskForm({ projects, goals = [], tasks = [], initial, onSubmit, onCancel }: {
+  projects: Pick<Project, "id" | "name">[]; goals?: Goal[]; tasks?: Task[]; initial?: Partial<Task>;
+  onSubmit: (data: TaskInput) => Promise<void>; onCancel?: () => void;
+}) {
+  const uid = useId();
+  const [form, setForm] = useState<TaskInput>({ title: initial?.title || "", projectId: initial?.projectId || projects[0]?.id || "",
+    priority: initial?.priority || "Medium", dueDate: initial?.dueDate?.slice(0,10) || null, goalId: initial?.goalId || null,
+    dependsOnId: initial?.dependsOnId || null, notes: initial?.notes || "", estimatedMinutes: initial?.estimatedMinutes || 30,
+    energy: initial?.energy || "Medium", context: initial?.context || "Any" });
+  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const change = (key: keyof TaskInput, value: string | number | null) => setForm((old) => ({ ...old, [key]: value }));
+  return <form className="task-form" onSubmit={async (event) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try { await onSubmit({ ...form, projectId: form.projectId || projects[0]?.id || "", title: form.title.trim() }); if (!initial?.id) setForm((old) => ({ ...old, title: "", notes: "", dueDate: null })); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not save."); } finally { setBusy(false); }
+  }}>
+    <label htmlFor={uid + "title"} className="full-width">Next action<input id={uid + "title"} autoFocus value={form.title} maxLength={300} required placeholder="What is the next concrete step?" onChange={(e) => change("title", e.target.value)} /></label>
+    <label htmlFor={uid + "project"}>Project<select id={uid + "project"} value={form.projectId || projects[0]?.id || ""} onChange={(e) => change("projectId", e.target.value)} required>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+    <label htmlFor={uid + "goal"}>Supports a goal<select id={uid + "goal"} value={form.goalId || ""} onChange={(e) => change("goalId", e.target.value || null)}><option value="">No goal yet</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}</select></label>
+    <label htmlFor={uid + "minutes"}>Estimated minutes<input id={uid + "minutes"} type="number" min={5} max={720} step={5} value={form.estimatedMinutes} onChange={(e) => change("estimatedMinutes", Number(e.target.value))} required /></label>
+    <label htmlFor={uid + "priority"}>Importance<select id={uid + "priority"} value={form.priority} onChange={(e) => change("priority", e.target.value)}>{["High", "Medium", "Low"].map((x) => <option key={x}>{x}</option>)}</select></label>
+    <label htmlFor={uid + "energy"}>Energy needed<select id={uid + "energy"} value={form.energy} onChange={(e) => change("energy", e.target.value)}>{["High", "Medium", "Low"].map((x) => <option key={x}>{x}</option>)}</select></label>
+    <label htmlFor={uid + "context"}>Where can you do it?<select id={uid + "context"} value={form.context} onChange={(e) => change("context", e.target.value)}>{["Any", "Desk", "Phone", "Outside"].map((x) => <option key={x}>{x}</option>)}</select></label>
+    <label htmlFor={uid + "due"}>Due date<input id={uid + "due"} type="date" value={form.dueDate || ""} onChange={(e) => change("dueDate", e.target.value || null)} /></label>
+    <label htmlFor={uid + "dependency"}>Do after<select id={uid + "dependency"} value={form.dependsOnId || ""} onChange={(e) => change("dependsOnId", e.target.value || null)}><option value="">Ready independently</option>{tasks.filter((t) => t.id !== initial?.id && t.column !== "Done").map((t) => <option value={t.id} key={t.id}>{t.title}</option>)}</select></label>
+    <label htmlFor={uid + "notes"} className="full-width">Notes<textarea id={uid + "notes"} value={form.notes} maxLength={4000} rows={2} onChange={(e) => change("notes", e.target.value)} placeholder="A useful link, a first step, or a definition of done." /></label>
+    {error && <p role="alert" className="error full-width">{error}</p>}
+    {!projects.length && <p className="muted full-width">Create a project in Goals & projects to add your first task.</p>}
+    <div className="actions full-width"><button className="button" disabled={busy || !projects.length}>{busy ? "Saving…" : initial?.id ? "Save changes" : "Add task"}</button>{onCancel && <button type="button" className="button-secondary" onClick={onCancel}>Cancel</button>}</div>
+  </form>;
 }
