@@ -8,9 +8,9 @@ export function FocusDock() {
   const pathname=usePathname();
   const [canResume,setCanResume]=useState(false);
   const [session,setSession]=useState<Session|null>(null),[clock,setClock]=useState(0),[offset,setOffset]=useState(0),[error,setError]=useState(""),[busy,setBusy]=useState(false);
-  const reload=useCallback(async()=>{const data=await request<{session:Session|null;canResume:boolean;serverNow:string}>("/api/focus");setSession(data.session);setCanResume(data.canResume);setOffset(Date.parse(data.serverNow)-Date.now());},[]);
+  const reload=useCallback(async()=>{const data=await request<{session:Session|null;canResume:boolean;serverNow:string}>("/api/focus");setSession(data.session);setCanResume(data.canResume);setOffset(Date.parse(data.serverNow)-Date.now());setError("");},[]);
   useEffect(()=>{if(pathname==="/login")return;
-    const refresh=()=>void reload().catch(e=>setError(e.message)); refresh();
+    const refresh=()=>{if(document.visibilityState==="visible")void reload().catch(e=>setError(e.message));}; refresh();
     const poll=setInterval(refresh,30000),tick=setInterval(()=>setClock(Date.now()),1000);
     window.addEventListener("boardo:changed",refresh); window.addEventListener("focus",refresh);
     return()=>{clearInterval(poll);clearInterval(tick);window.removeEventListener("boardo:changed",refresh);window.removeEventListener("focus",refresh);};

@@ -27,7 +27,12 @@ export function apiError(error: unknown) {
   if (error instanceof HttpError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message || "Invalid input." }, { status: 400 });
   const reference = crypto.randomUUID();
-  console.error("Request failed", reference, error instanceof Error ? error.name : "Unknown");
+  const details = error && typeof error === "object" ? error as { code?: string; errorCode?: string } : {};
+  const code = details.code || details.errorCode;
+  console.error("Request failed", { reference, name: error instanceof Error ? error.name : "Unknown", code });
+  if (code && ["P1001", "P1002", "P1017", "P2024", "P2037"].includes(code)) {
+    return NextResponse.json({ error: "The database is temporarily busy. Please try again shortly.", reference }, { status: 503, headers: { "Retry-After": "1", "Cache-Control": "private, no-store" } });
+  }
   return NextResponse.json({ error: "Something went wrong. Please retry.", reference }, { status: 500 });
 }
 export const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
