@@ -6,7 +6,7 @@ export function useToday() {
   const [data, setData] = useState<Today | null>(null);
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   const generation = useRef(0); const changing = useRef(false);
-  const reload = useCallback(async () => { const ticket = ++generation.current; const next = await request<Today>("/api/today"); if (ticket === generation.current) setData(next); }, []);
+  const reload = useCallback(async () => { const ticket = ++generation.current; const next = await request<Today>("/api/today"); if (ticket === generation.current) { setData(next); setError(""); } }, []);
   useEffect(() => {
     const controller = new AbortController();
     const ticket = ++generation.current;
