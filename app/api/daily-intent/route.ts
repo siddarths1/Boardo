@@ -14,7 +14,7 @@ export async function PUT(request: Request) {
       const count = await tx.task.count({ where: { id: { in: ids }, project: { userId: user.id, archived: false } } });
       if (count !== ids.length) throw new HttpError(400, "Choose tasks from your active projects.");
       return tx.dailyIntent.upsert({ where: { userId_date: { userId: user.id, date } },
-        create: { userId: user.id, date, ...data, version: 1 }, update: { ...data, version: { increment: 1 } } });
+        create: { userId: user.id, date, ...data, capacityConfirmed: true, version: 1 }, update: { ...data, capacityConfirmed: true, version: { increment: 1 } } });
     });
     return json(intent);
   });

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "./db";
 import { HttpError } from "./http";
+import { focusEnd } from "./time-metrics";
 import { taskCreate, taskPatch, taskAction } from "./validation";
 
 export const taskInclude = { project: { select: { name: true, archived: true } }, goal: true,
@@ -44,7 +45,7 @@ export async function createTask(userId: string, input: z.infer<typeof taskCreat
     await checkLinks(tx, userId, input);
     const count = await tx.task.count({ where: { projectId: input.projectId, column: "Todo" } });
     const task = await tx.task.create({ data: { ...input, orderInColumn: count }, include: taskInclude });
-    await tx.activityEvent.create({ data: { userId, taskId: task.id, action: "created" } });
+    await tx.activityEvent.create({ data: { userId, taskId: task.id, taskTitle: task.title, projectId: task.projectId, projectName: task.project.name, goalId: task.goalId, goalTitle: task.goal?.title, action: "created" } });
     return task;
   });
 }
@@ -60,7 +61,10 @@ async function normalize(tx: Prisma.TransactionClient, projectId: string, column
 export async function stopFocus(tx: Prisma.TransactionClient, userId: string, taskId?: string) {
   const now = new Date();
   const active = await tx.focusSession.findMany({ where: { userId, endedAt: null, ...(taskId ? { taskId } : {}) } });
-  for (const session of active) await tx.focusSession.update({ where: { id: session.id }, data: { endedAt: now, minutes: Math.max(0, Math.round((now.getTime() - session.startedAt.getTime()) / 60000)) } });
+  for (const session of active) {
+    const endedAt = new Date(focusEnd(session, now));
+    await tx.focusSession.update({ where: { id: session.id }, data: { endedAt, stopReason: endedAt < now ? "limit" : "paused", version: { increment: 1 }, minutes: Math.max(0, Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 60000)) } });
+  }
 }
 export async function patchTask(userId: string, id: string, input: z.infer<typeof taskPatch>) {
   return userTransaction(userId, async (tx) => {
@@ -76,7 +80,7 @@ export async function patchTask(userId: string, id: string, input: z.infer<typeo
       if (destProject !== previous.projectId || destColumn !== previous.column) await normalize(tx, previous.projectId, previous.column);
       await normalize(tx, destProject, destColumn, id, data.orderInColumn ?? 0);
     }
-    await tx.activityEvent.create({ data: { userId, taskId: id, action: data.column === "Done" ? "done" : "edited" } });
+    await tx.activityEvent.create({ data: { userId, taskId: id, taskTitle: previous.title, projectId: previous.projectId, projectName: previous.project.name, goalId: previous.goalId, goalTitle: previous.goal?.title, action: data.column === "Done" && previous.column !== "Done" ? "done" : "edited" } });
     return tx.task.findUniqueOrThrow({ where: { id }, include: taskInclude });
   });
 }
@@ -89,7 +93,12 @@ export async function actOnTask(userId: string, id: string, input: z.infer<typeo
       if (task.column === "Done" || task.blockedReason || (task.dependsOn && task.dependsOn.column !== "Done")) throw new HttpError(409, "Unblock or reopen this task before starting.");
       await stopFocus(tx, userId);
       data.column = "InProgress"; data.deferredUntil = null;
-      await tx.focusSession.create({ data: { userId, taskId: id } });
+      const startedAt = new Date();
+      const plannedMinutes = Math.min(input.minutes ?? 25, 180);
+      await tx.focusSession.create({ data: { userId, taskId: id, startedAt, plannedMinutes,
+        limitAt: new Date(startedAt.getTime() + plannedMinutes * 60000),
+        taskTitle: task.title, projectId: task.projectId, projectName: task.project.name,
+        goalId: task.goalId, goalTitle: task.goal?.title } });
     } else if (input.action === "done") {
       data.column = "Done"; data.completedAt = new Date(); data.deferredUntil = null; data.blockedReason = null;
       await stopFocus(tx, userId, id);
@@ -112,15 +121,16 @@ export async function actOnTask(userId: string, id: string, input: z.infer<typeo
     }
     const changed = await tx.task.update({ where: { id }, data, include: taskInclude });
     if (changed.column !== task.column) { await normalize(tx, task.projectId, task.column); await normalize(tx, task.projectId, changed.column, id, 0); }
-    await tx.activityEvent.create({ data: { userId, taskId: id, action: input.action, detail: input.reason || "" } });
+    await tx.activityEvent.create({ data: { userId, taskId: id, taskTitle: task.title, projectId: task.projectId, projectName: task.project.name, goalId: task.goalId, goalTitle: task.goal?.title, action: input.action, detail: input.reason || "" } });
     return tx.task.findUniqueOrThrow({ where: { id }, include: taskInclude });
   });
 }
 export async function deleteTask(userId: string, id: string, version: number) {
   return userTransaction(userId, async (tx) => {
     const task = await ownedTask(tx, userId, id, version);
+    await stopFocus(tx, userId, id);
     await tx.task.delete({ where: { id } });
     await normalize(tx, task.projectId, task.column);
-    await tx.activityEvent.create({ data: { userId, taskId: id, action: "deleted" } });
+    await tx.activityEvent.create({ data: { userId, taskId: id, taskTitle: task.title, projectId: task.projectId, projectName: task.project.name, goalId: task.goalId, goalTitle: task.goal?.title, action: "deleted" } });
   });
 }

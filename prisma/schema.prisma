@@ -96,47 +96,65 @@ model Task {
 }
 
 model DailyIntent {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date             String
-  outcomes         String[] @default([])
-  outcomeTaskIds   String[] @default([])
-  pinnedTaskIds    String[] @default([])
-  availableMinutes Int      @default(240)
-  bufferPercent    Int      @default(20)
-  energy           String   @default("Medium")
-  context          String   @default("Desk")
-  review           String   @default("")
-  version          Int      @default(0)
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              String
+  outcomes          String[] @default([])
+  outcomeTaskIds    String[] @default([])
+  pinnedTaskIds     String[] @default([])
+  availableMinutes  Int      @default(240)
+  capacityConfirmed Boolean  @default(false)
+  bufferPercent     Int      @default(20)
+  energy            String   @default("Medium")
+  context           String   @default("Desk")
+  review            String   @default("")
+  version           Int      @default(0)
+  updatedAt         DateTime @updatedAt
 
   @@unique([userId, date])
 }
 
 model ActivityEvent {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskId    String?
-  action    String
-  detail    String   @default("")
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId      String?
+  action      String
+  detail      String   @default("")
+  taskTitle   String?
+  projectId   String?
+  projectName String?
+  goalId      String?
+  goalTitle   String?
+  createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
 }
 
 model FocusSession {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taskId    String
-  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
-  minutes   Int       @default(0)
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId         String?
+  task           Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  minutes        Int       @default(0)
+  plannedMinutes Int       @default(25)
+  limitAt        DateTime?
+  taskTitle      String    @default("")
+  projectId      String?
+  projectName    String    @default("")
+  goalId         String?
+  goalTitle      String?
+  attribution    String    @default("captured")
+  stopReason     String?
+  correctionNote String?
+  version        Int       @default(0)
 
   @@index([userId, startedAt])
+  @@index([userId, endedAt])
 }
 
 model DigestRun {
