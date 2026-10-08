@@ -1,0 +1,1 @@
+ALTER TABLE "DailyIntent" ADD COLUMN "capacityConfirmed" BOOLEAN NOT NULL DEFAULT false;

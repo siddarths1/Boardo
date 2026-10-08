@@ -93,3 +93,6 @@ The browser test starts its own development server on port 3100 with synthetic c
 - `RELEASE_NOTES.md`: implementation verification and rollout status.
 
 The original audit documents describe the pre-implementation revision and remain historical references.
+
+## Review analytics and focus controls
+See [the analytics guide](docs/ANALYTICS_AND_FOCUS.md) for three-year reports, timer controls, metric definitions and historical-data limitations.

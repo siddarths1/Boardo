@@ -13,7 +13,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (project.version !== version) throw new HttpError(409, "Project changed. Refresh and try again.");
       if (data.archived) {
         const active = await tx.focusSession.findFirst({ where: { userId: user.id, endedAt: null, task: { projectId: id } } });
-        if (active) await stopFocus(tx, user.id, active.taskId);
+        if (active?.taskId) await stopFocus(tx, user.id, active.taskId);
       }
       await tx.project.update({ where: { id }, data: { ...data, version: { increment: 1 } } });
       if (data.order !== undefined) {

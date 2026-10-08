@@ -1,6 +1,8 @@
+import { resetTestOwner } from "./reset";
 import { test, expect } from "@playwright/test";
+test.beforeEach(resetTestOwner);
 test("private APIs reject anonymous access and unsafe writes", async ({ request }) => {
-  for (const path of ["/api/projects", "/api/tasks", "/api/today", "/api/goals"]) expect((await request.get(path)).status()).toBe(401);
+  for (const path of ["/api/projects", "/api/tasks", "/api/today", "/api/goals", "/api/analytics", "/api/focus"]) expect((await request.get(path)).status()).toBe(401);
   expect((await request.post("/api/tasks", { data: { title: "Not allowed" } })).status()).toBe(401);
   expect((await request.get("/api/cron/daily-digest")).status()).toBe(401);
   expect((await request.post("/api/auth/login", { data: { password: "boardo-test-password" }, headers: { Origin: "https://untrusted.invalid" } })).status()).toBe(403);
@@ -41,6 +43,6 @@ test("capture, plan, focus, complete and reflect on desktop and mobile", async (
   await page.getByRole("link", { name: "Review", exact: true }).click();
   await page.getByLabel("What moved forward? What should change tomorrow?").fill("Finished the draft. Keep the next step small.");
   await page.getByRole("button", { name: "Save reflection" }).click();
-  await expect(page.getByRole("status")).toContainText("Reflection saved");
+  await expect(page.getByRole("status").filter({ hasText: "Reflection saved" })).toBeVisible();
   await page.reload(); await expect(page.getByLabel("What moved forward? What should change tomorrow?")).toHaveValue("Finished the draft. Keep the next step small.");
 });

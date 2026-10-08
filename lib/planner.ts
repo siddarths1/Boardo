@@ -13,9 +13,10 @@ const levels: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
 export function localDayRange(now: Date, timezone: string) {
   const date = localDate(now, timezone);
   const tomorrow = new Date(Date.parse(date) + 86400000).toISOString().slice(0, 10);
+  const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
   const boundary = (target: string) => {
     let low = Date.parse(target) - 36 * 3600000, high = Date.parse(target) + 36 * 3600000;
-    while (high - low > 1) { const mid = Math.floor((low + high) / 2); if (localDate(new Date(mid), timezone) < target) low = mid; else high = mid; }
+    while (high - low > 1) { const mid = Math.floor((low + high) / 2); if (formatter.format(new Date(mid)) < target) low = mid; else high = mid; }
     return high;
   };
   return { start: boundary(date), end: boundary(tomorrow) };

@@ -1,3 +1,4 @@
+import { focusEnd } from "./time-metrics";
 import { User } from "@prisma/client";
 import { prisma } from "./db";
 import { listTasks } from "./tasks";
@@ -21,14 +22,15 @@ export async function todayData(user: User) {
   let spentMinutes = 0;
   const taskMinutes: Record<string, number> = {};
   for (const session of sessions) {
-    const end = session.endedAt || now;
+    const end = new Date(focusEnd(session, now));
     const minutesToday = Math.max(0, Math.min(end.getTime(), day.end) - Math.max(session.startedAt.getTime(), day.start)) / 60000;
     spentMinutes += minutesToday;
-    taskMinutes[session.taskId] = (taskMinutes[session.taskId] || 0) + Math.floor(minutesToday);
+    if (session.taskId) taskMinutes[session.taskId] = (taskMinutes[session.taskId] || 0) + minutesToday;
   }
-  const active = sessions.find((s) => !s.endedAt) || null;
-  const plan = planDay(tasks, intent, { now, timezone: user.timezone, spentMinutes: Math.floor(spentMinutes), activeTaskId: active?.taskId, taskMinutes });
+  for (const id of Object.keys(taskMinutes)) taskMinutes[id] = Math.floor(taskMinutes[id]);
+  const active = sessions.find((s) => !s.endedAt && focusEnd(s, now) >= now.getTime()) || null;
+  const plan = planDay(tasks, intent, { now, timezone: user.timezone, spentMinutes: Math.floor(spentMinutes), activeTaskId: active?.taskId || undefined, taskMinutes });
   const todayEvents = events.filter((e) => localDate(e.createdAt, user.timezone) === date);
-  return { date, timezone: user.timezone, intent, hasIntent: Boolean(saved), tasks, projects, goals, plan, activeSession: active,
+  return { date, timezone: user.timezone, intent, hasIntent: Boolean(saved?.capacityConfirmed), tasks, projects, goals, plan, activeSession: active,
     spentMinutes: Math.floor(spentMinutes), completedToday: tasks.filter((t) => t.completedAt && localDate(t.completedAt, user.timezone) === date).length, activity: todayEvents };
 }
